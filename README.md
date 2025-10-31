@@ -1,9 +1,9 @@
-# Zed Org Mode
+# Noteboks
 
-Org Mode support for Zed.
+A note/organisation vault, similar to Logseq, implemented as an LSP and a Zed
+editor extension.
 
-![Demo of Zed Org Mode](demo.png)
+The name, noteboks, is probably temporary, but I needed a name to fork the
+[zed-org](https://github.com/hron/zed-org) Zed extension.
 
-## License
-
-This project is licensed under the [MIT License](LICENSE).
+The base file type is org files, i.e. Emacs' `org-mode`.

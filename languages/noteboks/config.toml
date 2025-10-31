@@ -1,0 +1,3 @@
+name = "Noteboks"
+grammar = "org"
+path_suffixes = ["note", "art", "list", "index", "dump"]
