@@ -57,7 +57,7 @@ impl LanguageServer for Backend {
         let uri = pos.text_document.uri;
 
         if let Some(note) = self.index.lock().await.note_at_uri(&uri) {
-            if let Some(tree) = note.get_tree() {
+            if let Some((tree, doc)) = note.get_tree_and_doc() {
                 let mut cur = tree.walk();
 
                 while cur.goto_first_child_for_point(pt).is_some() {
@@ -70,7 +70,7 @@ impl LanguageServer for Backend {
 
                 if node.grammar_name() == "link" {
                     if let Some(url) = node.child_by_field_name("uri") {
-                        let text = note.document.get_content(None).as_bytes()
+                        let text = doc.get_content(None).as_bytes()
                             [url.start_byte()..url.end_byte()]
                             .as_ref();
 
@@ -134,9 +134,13 @@ async fn main() {
         .set_language(&tree_sitter_org::language())
         .expect("could not load parser");
 
+    let mut index = Index::new(parser);
+    index.scan();
+
     let (service, socket) = LspService::new(|client| Backend {
         client,
-        index: Arc::new(Mutex::new(Index::new(parser))),
+        index: Arc::new(Mutex::new(index)),
     });
+
     Server::new(stdin, stdout, socket).serve(service).await;
 }

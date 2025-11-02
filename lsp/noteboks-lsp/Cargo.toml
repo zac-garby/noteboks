@@ -12,6 +12,7 @@ serde = "1.0.228"
 tree-sitter = "0.25.10"
 tree-sitter-org = { git = "https://github.com/zac-garby/tree-sitter-org.git" }
 lsp-types = "0.97.0"
+walkdir = "2.5.0"
 
 [build-dependencies]
 cc="*"
