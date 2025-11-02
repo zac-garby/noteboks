@@ -8,7 +8,7 @@ repository = "https://github.com/zac-garby/noteboks"
 
 [grammars.org]
 repository = "https://github.com/zac-garby/tree-sitter-org"
-commit = "770aceb0a18608d27342d8b1a34e839c0d927f53"
+commit = "ca75789f2634f9b3cc4e396adf1a40059a0516af"
 
 [language_servers.noteboks]
 name = "Noteboks LSP"

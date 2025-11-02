@@ -1,4 +1,4 @@
-use zed_extension_api::{self as zed, CodeLabel, CodeLabelSpan, lsp::Symbol, settings::LspSettings};
+use zed_extension_api::{self as zed, CodeLabel, CodeLabelSpan, LanguageServerId, Range, lsp::Symbol, settings::LspSettings};
 
 struct Noteboks {
 

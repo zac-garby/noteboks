@@ -1,15 +1,18 @@
-use std::{collections::BTreeMap, sync::{Arc, Mutex}};
+use std::{collections::{BTreeMap, HashMap}, sync::{Arc, Mutex}};
 
 use lsp_textdocument::FullTextDocument;
 use tower_lsp::lsp_types::{TextDocumentContentChangeEvent, TextDocumentItem, Url, VersionedTextDocumentIdentifier};
 use tree_sitter::{Parser, Tree};
 
+type NoteName = String;
+
 pub struct Index {
     parser: Arc<Mutex<Parser>>,
-    notes: BTreeMap<Url, Note>,
+    notes: BTreeMap<NoteName, Note>
 }
 
 pub struct Note {
+    pub document_uri: Url,
     pub document: FullTextDocument,
     tree: Option<Tree>,
 }
@@ -24,16 +27,30 @@ impl Index {
     pub fn new(parser: Parser) -> Self {
         Self{
             parser: Arc::new(Mutex::new(parser)),
-            notes: BTreeMap::new(),
+            notes: BTreeMap::new()
         }
     }
 
-    pub fn get_note(&self, uri: &Url) -> Option<&Note> {
-        self.notes.get(uri)
+    pub fn note_at_uri(&self, uri: &Url) -> Option<&Note> {
+        if let Some(note_name) = self.note_name_for_uri(uri) {
+            self.notes.get(&note_name)
+        } else {
+            None
+        }
     }
 
-    pub fn get_note_mut(&mut self, uri: &Url) -> Option<&mut Note> {
-        self.notes.get_mut(uri)
+    pub fn note_at_uri_mut(&mut self, uri: &Url) -> Option<&mut Note> {
+        if let Some(note_name) = self.note_name_for_uri(uri) {
+            self.notes.get_mut(&note_name)
+        } else {
+            None
+        }
+    }
+
+    pub fn note_name_for_uri(&self, uri: &Url) -> Option<NoteName> {
+        uri.to_file_path().ok()?.file_name()?.to_str().map(|filename| {
+            String::from(filename)
+        })
     }
 
     pub fn handle_open(
@@ -45,12 +62,19 @@ impl Index {
             document.text,
         );
 
-        self.notes.insert(document.uri.clone(), Note{
-            tree: None,
-            document: doc,
-        });
+        let uri = document.uri;
 
-        self.update_tree(&document.uri)
+        if let Some(note_name) = self.note_name_for_uri(&uri) {
+            self.notes.insert(note_name, Note{
+                document_uri: uri.clone(),
+                tree: None,
+                document: doc,
+            });
+
+            self.update_tree(&uri)
+        } else {
+            false
+        }
     }
 
     pub fn handle_edit(
@@ -62,7 +86,7 @@ impl Index {
             serde_json::from_value(serde_json::to_value(changes).unwrap())
                 .unwrap();
 
-        if let Some(doc) = self.notes.get_mut(&document.uri) {
+        if let Some(doc) = self.note_at_uri_mut(&document.uri) {
             doc.document.update(
                 &changes_,
                 document.version
@@ -78,13 +102,13 @@ impl Index {
         &mut self,
         uri: &Url,
     ) -> bool {
-        let new_tree = self.get_note(uri).and_then(|note| {
+        let new_tree = self.note_at_uri(uri).and_then(|note| {
             let mut parser = self.parser.lock().unwrap();
             let content = note.document.get_content(None);
             parser.parse(content, None)
         });
 
-        if let Some(note) = self.get_note_mut(uri) {
+        if let Some(note) = self.note_at_uri_mut(uri) {
             note.tree = new_tree;
             true
         } else {

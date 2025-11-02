@@ -32,6 +32,7 @@ impl LanguageServer for Backend {
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 hover_provider: Some(HoverProviderCapability::Simple(true)),
+                definition_provider: Some(OneOf::Left(true)),
                 text_document_sync: Some(TextDocumentSyncCapability::Kind(
                     TextDocumentSyncKind::INCREMENTAL,
                 )),
@@ -55,18 +56,8 @@ impl LanguageServer for Backend {
 
         let uri = pos.text_document.uri;
 
-        self.log(format!("\n\nhovered at {}:{}", pt.row, pt.column))
-            .await;
-
-        if let Some(note) = self.index.lock().await.get_note(&uri) {
-            self.log(format!("note found for {}", uri)).await;
-
-            self.log(format!("\n```\n{}\n```\n", note.document.get_content(None)))
-                .await;
-
+        if let Some(note) = self.index.lock().await.note_at_uri(&uri) {
             if let Some(tree) = note.get_tree() {
-                self.log(format!("tree found for {}", uri)).await;
-
                 let mut cur = tree.walk();
 
                 while cur.goto_first_child_for_point(pt).is_some() {
@@ -78,15 +69,10 @@ impl LanguageServer for Backend {
                 let node = cur.node();
 
                 if node.grammar_name() == "link" {
-                    self.log(format!("link found: {:?}", node)).await;
-
                     if let Some(url) = node.child_by_field_name("uri") {
                         let text = note.document.get_content(None).as_bytes()
                             [url.start_byte()..url.end_byte()]
                             .as_ref();
-
-                        self.log(format!("url found: {}", String::from_utf8_lossy(text)))
-                            .await;
 
                         let str = String::from_utf8_lossy(text);
 
@@ -104,24 +90,33 @@ impl LanguageServer for Backend {
         Ok(None)
     }
 
+    async fn goto_definition(
+        &self,
+        params: GotoDefinitionParams,
+    ) -> Result<Option<GotoDefinitionResponse>> {
+        let uri = params.text_document_position_params.text_document.uri;
+
+        Ok(Some(GotoDefinitionResponse::Scalar(Location {
+            uri: uri,
+            range: Range::new(Position::new(0, 0), Position::new(0, 10)),
+        })))
+    }
+
     async fn did_open(&self, params: DidOpenTextDocumentParams) {
         self.log(format!("opened doc: {}", params.text_document.uri))
             .await;
 
-        let r = self.index.lock().await.handle_open(params.text_document);
-        self.log(format!("  -> r: {}", r)).await;
+        self.index.lock().await.handle_open(params.text_document);
     }
 
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         self.log(format!("changed doc: {}", params.text_document.uri))
             .await;
 
-        let r = self
-            .index
+        self.index
             .lock()
             .await
             .handle_edit(params.text_document, params.content_changes);
-        self.log(format!("  -> r: {}", r)).await;
     }
 
     async fn shutdown(&self) -> Result<()> {
