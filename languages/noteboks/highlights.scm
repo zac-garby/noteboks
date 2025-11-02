@@ -2,11 +2,15 @@
 ; right now, anonymous nodes can not be anchored.
 ; See https://github.com/tree-sitter/tree-sitter/issues/1461
 
+
 ; Example highlighting for headlines. The headlines here will be matched
 ; cyclically, easily extended to match however your heart desires.
-(headline (stars) @comment (#match? @comment "^(\\*{3})*\\*$") (item) @function)
-(headline (stars) @comment (#match? @comment "^(\\*{3})*\\*\\*$") (item) @string.regex)
-(headline (stars) @comment (#match? @comment "^(\\*{3})*\\*\\*\\*$") (item) @operator)
+(headline (stars) @comment (item) @title) @title
+(headline (stars) @function (#match? @function "^(\\*{3})*\\*$"))
+(headline (stars) @string.regex (#match? @string.regex "^(\\*{3})*\\*\\*$"))
+(headline (stars) @operator (#match? @operator "^(\\*{3})*\\*\\*\\*$"))
+
+(link uri: "uri" @link_uri) @link_text
 
 ; TODO/DONE
 (item . (expr) @keyword (#eq? @keyword "TODO"))

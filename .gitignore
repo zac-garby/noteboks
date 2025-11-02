@@ -1,1 +1,11 @@
+# Zed extension
 grammars/
+extension.wasm
+
+# Rust
+debug
+target
+**/*.rs.bk
+*.pdb
+**/mutants.out*/
+doc
