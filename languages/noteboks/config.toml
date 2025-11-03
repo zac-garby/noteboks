@@ -1,6 +1,6 @@
 name = "noteboks"
 grammar = "org"
-path_suffixes = ["note", "art", "list", "index", "dump"]
+path_suffixes = ["note", "article", "list", "index", "dump"]
 autoclose_before = "]"
 brackets = [
     { start = "[", end = "]", close = true, newline = true },

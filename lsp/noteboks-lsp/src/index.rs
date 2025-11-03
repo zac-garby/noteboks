@@ -1,15 +1,16 @@
 use std::{
     collections::{BTreeMap, HashMap, HashSet},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
-use lsp_types::{Position, Range};
-use tree_sitter::StreamingIterator;
 use lsp_textdocument::FullTextDocument;
+use lsp_types::{Position, Range};
+use regex::Regex;
 use tower_lsp::lsp_types::{
     TextDocumentContentChangeEvent, TextDocumentItem, Url, VersionedTextDocumentIdentifier,
 };
+use tree_sitter::StreamingIterator;
 use tree_sitter::{Parser, Query, QueryCursor, Tree};
 use walkdir::WalkDir;
 
@@ -24,16 +25,30 @@ pub enum NoteKind {
 }
 
 impl NoteKind {
-    pub fn from_path(path: &Path) -> Option<Self> {
-        match path.extension().and_then(|ext| ext.to_str()) {
-            Some("note") => Some(NoteKind::Note),
-            Some("art") => Some(NoteKind::Article),
-            Some("list") => Some(NoteKind::List),
-            Some("index") => Some(NoteKind::Index),
-            Some("dump") => Some(NoteKind::Dump),
+    pub fn from_str(s: &str) -> Option<Self> {
+        match s {
+            "note" => Some(NoteKind::Note),
+            "article" => Some(NoteKind::Article),
+            "list" => Some(NoteKind::List),
+            "index" => Some(NoteKind::Index),
+            "dump" => Some(NoteKind::Dump),
 
             _ => None,
         }
+    }
+
+    pub fn to_str(&self) -> &str {
+        match self {
+            NoteKind::Note => "note",
+            NoteKind::Article => "article",
+            NoteKind::List => "list",
+            NoteKind::Index => "index",
+            NoteKind::Dump => "dump",
+        }
+    }
+
+    pub fn from_path(path: &Path) -> Option<Self> {
+        Self::from_str(path.extension()?.to_str()?)
     }
 }
 
@@ -58,10 +73,33 @@ impl NoteID {
             kind,
         })
     }
+
+    pub fn to_filename(&self) -> PathBuf {
+        let str = format!("{}.{}", self.name, self.kind.to_str());
+        return PathBuf::from(str);
+    }
+
+    pub fn from_link(link: &str) -> Option<Self> {
+        let re = Regex::new(
+            r"^(?<name>[_\-\?\:\/\\\w\d ]+)\s*(?<kind>(?:\((?:note|article|list|index|dump)\))?)$",
+        )
+        .unwrap();
+
+        re.captures(link).map(|c| {
+            let (_, [name, kind_str]) = c.extract();
+            let kind =
+                NoteKind::from_str(kind_str.trim_matches(&['(', ')'])).unwrap_or(NoteKind::Note);
+
+            NoteID {
+                name: String::from(name.trim()),
+                kind,
+            }
+        })
+    }
 }
 
 pub struct Index {
-    root: Box<Path>,
+    pub root: Box<Path>,
     parser: Arc<Mutex<Parser>>,
     notes: BTreeMap<NoteID, Note>,
 }
@@ -104,8 +142,10 @@ impl Note {
             .and_then(|tree| self.document.as_ref().map(|doc| (tree, doc)))
     }
 
-    pub fn update_links(&self) {
+    pub fn update_links(&mut self) {
         println!("updating links in {:?}", self.id);
+
+        let mut new_links = Vec::new();
 
         if let Some((tree, doc)) = self.get_tree_and_doc() {
             let query = Query::new(
@@ -115,7 +155,9 @@ impl Note {
             .expect("invalid query");
 
             let mut cur = QueryCursor::new();
-            let mut matches = cur.matches(&query, tree.root_node(), doc.get_content(None).as_bytes());
+            let mut matches =
+                cur.matches(&query, tree.root_node(), doc.get_content(None).as_bytes());
+
             while let Some(m) = matches.next() {
                 let uri_node = m.captures[1].node;
                 let start = uri_node.start_position();
@@ -126,9 +168,16 @@ impl Note {
                     Position::new(end.row as u32, end.column as u32),
                 )));
 
-                println!("  got link {source:?}")
+                if let Some(id) = NoteID::from_link(source) {
+                    new_links.push(id);
+                }
             }
         }
+
+        self.outlinks.clear();
+        new_links.iter().for_each(|id| {
+            self.outlinks.insert(id.clone());
+        });
     }
 }
 

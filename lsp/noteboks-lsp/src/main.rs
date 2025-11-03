@@ -1,5 +1,6 @@
 mod index;
 
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use tokio::sync::Mutex;
@@ -8,7 +9,7 @@ use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 use tree_sitter::{Parser, Point};
 
-use crate::index::Index;
+use crate::index::{Index, NoteID};
 
 struct Backend {
     client: Client,
@@ -94,13 +95,50 @@ impl LanguageServer for Backend {
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
-        // Ok(None)
-        let uri = params.text_document_position_params.text_document.uri;
+        let pos = params.text_document_position_params;
+        let uri = pos.text_document.uri;
+        let pt = Point::new(
+            pos.position.line.try_into().unwrap(),
+            pos.position.character.try_into().unwrap(),
+        );
 
-        Ok(Some(GotoDefinitionResponse::Scalar(Location {
-            uri: uri,
-            range: Range::new(Position::new(0, 0), Position::new(0, 10)),
-        })))
+        let index = self.index.lock().await;
+
+        if let Some(note) = index.note_at_uri(&uri) {
+            if let Some((tree, doc)) = note.get_tree_and_doc() {
+                let mut cur = tree.walk();
+
+                while cur.goto_first_child_for_point(pt).is_some() {
+                    if cur.node().grammar_name() == "link" {
+                        break;
+                    }
+                }
+
+                let node = cur.node();
+
+                if node.grammar_name() == "link" {
+                    if let Some(url) = node.child_by_field_name("uri") {
+                        let text = doc.get_content(None).as_bytes()
+                            [url.start_byte()..url.end_byte()]
+                            .as_ref();
+
+                        let link = String::from_utf8_lossy(text);
+
+                        if let Some(id) = NoteID::from_link(&link.to_string()) {
+                            let mut filepath = PathBuf::from(index.root.clone());
+                            filepath.push(id.to_filename());
+
+                            return Ok(Some(GotoDefinitionResponse::Scalar(Location {
+                                uri: Url::from_file_path(filepath).unwrap(),
+                                range: Range::new(Position::new(0, 0), Position::new(0, 10)),
+                            })));
+                        }
+                    }
+                }
+            }
+        }
+
+        Ok(None)
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {

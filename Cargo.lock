@@ -528,6 +528,7 @@ dependencies = [
  "cc",
  "lsp-textdocument",
  "lsp-types 0.97.0",
+ "regex",
  "serde",
  "serde_json",
  "tokio",
