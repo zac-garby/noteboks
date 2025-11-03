@@ -1,14 +1,16 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, HashMap, HashSet},
     path::Path,
     sync::{Arc, Mutex},
 };
 
+use lsp_types::{Position, Range};
+use tree_sitter::StreamingIterator;
 use lsp_textdocument::FullTextDocument;
 use tower_lsp::lsp_types::{
     TextDocumentContentChangeEvent, TextDocumentItem, Url, VersionedTextDocumentIdentifier,
 };
-use tree_sitter::{Parser, Tree};
+use tree_sitter::{Parser, Query, QueryCursor, Tree};
 use walkdir::WalkDir;
 
 #[allow(dead_code)]
@@ -65,15 +67,68 @@ pub struct Index {
 }
 
 pub struct Note {
+    pub id: NoteID,
     pub document: Option<FullTextDocument>,
-    tree: Option<Tree>,
+    pub tree: Option<Tree>,
+    pub outlinks: HashSet<NoteID>,
 }
 
 impl Note {
+    pub fn new(id: NoteID) -> Self {
+        Note {
+            id,
+            document: None,
+            tree: None,
+            outlinks: HashSet::new(),
+        }
+    }
+
+    pub fn of_file(path: &Path) -> Option<Self> {
+        let content = std::fs::read_to_string(path).ok()?;
+
+        let document = FullTextDocument::new(
+            String::from(tree_sitter_org::language().name()?),
+            0,
+            content,
+        );
+
+        Some(Note {
+            document: Some(document),
+            ..Note::new(NoteID::from_path(path)?)
+        })
+    }
+
     pub fn get_tree_and_doc(&self) -> Option<(&Tree, &FullTextDocument)> {
         self.tree
             .as_ref()
             .and_then(|tree| self.document.as_ref().map(|doc| (tree, doc)))
+    }
+
+    pub fn update_links(&self) {
+        println!("updating links in {:?}", self.id);
+
+        if let Some((tree, doc)) = self.get_tree_and_doc() {
+            let query = Query::new(
+                &tree_sitter_org::language(),
+                "(link uri: \"uri\" @uri) @link",
+            )
+            .expect("invalid query");
+
+            let mut cur = QueryCursor::new();
+            let mut matches = cur.matches(&query, tree.root_node(), doc.get_content(None).as_bytes());
+            while let Some(m) = matches.next() {
+                let uri_node = m.captures[1].node;
+                let start = uri_node.start_position();
+                let end = uri_node.end_position();
+
+                let source = doc.get_content(Some(Range::new(
+                    Position::new(start.row as u32, start.column as u32),
+                    Position::new(end.row as u32, end.column as u32),
+                )));
+
+                println!("  got link {source:?}")
+            }
+        }
     }
 }
 
@@ -94,48 +149,29 @@ impl Index {
             .filter_map(Result::ok)
             .filter(|entry| entry.file_type().is_file())
         {
-            if let Some(note_name) = NoteID::from_path(entry.path()) {
-                if let Some(_) = self.notes.get(&note_name) {
-                } else {
-                    let note = Note {
-                        document: None,
-                        tree: None,
-                    };
-
-                    println!("scanned note: {note_name:?}");
-
-                    self.notes.insert(note_name, note);
-                }
+            if let Some(note) = Note::of_file(entry.path()) {
+                println!("scanned note: {:?}", note.id);
+                let id = note.id.clone();
+                self.notes.insert(id.clone(), note);
+                self.update_tree(&id);
             }
         }
     }
 
     pub fn note_at_uri(&self, uri: &Url) -> Option<&Note> {
-        let note_name = NoteID::from_uri(uri)?;
-        self.notes.get(&note_name)
+        let note_id = NoteID::from_uri(uri)?;
+        self.notes.get(&note_id)
     }
 
     pub fn note_at_uri_mut(&mut self, uri: &Url) -> Option<&mut Note> {
-        let note_name = NoteID::from_uri(uri)?;
-        self.notes.get_mut(&note_name)
+        let note_id = NoteID::from_uri(uri)?;
+        self.notes.get_mut(&note_id)
     }
 
     pub fn handle_open(&mut self, document: TextDocumentItem) -> bool {
         let doc = FullTextDocument::new(document.language_id, document.version, document.text);
 
-        let uri = document.uri;
-
-        if let Some(note_name) = NoteID::from_uri(&uri) {
-            let note = Note {
-                tree: None,
-                document: Some(doc),
-            };
-
-            self.notes.insert(note_name, note);
-            self.update_tree(&uri)
-        } else {
-            false
-        }
+        false
     }
 
     pub fn handle_edit(
@@ -147,20 +183,18 @@ impl Index {
             serde_json::from_value(serde_json::to_value(changes).unwrap()).unwrap();
 
         if let Some(note) = self.note_at_uri_mut(&document.uri) {
+            let id = note.id.clone();
             if let Some(doc) = note.document.as_mut() {
                 doc.update(&changes_, document.version);
-
-                self.update_tree(&document.uri)
-            } else {
-                false
             }
+            self.update_tree(&id)
         } else {
             false
         }
     }
 
-    fn update_tree(&mut self, uri: &Url) -> bool {
-        let new_tree = self.note_at_uri(uri).and_then(|note| {
+    fn update_tree(&mut self, id: &NoteID) -> bool {
+        let new_tree = self.notes.get(id).and_then(|note| {
             let mut parser = self.parser.lock().unwrap();
             note.document.as_ref().and_then(|doc| {
                 let content = doc.get_content(None);
@@ -168,10 +202,13 @@ impl Index {
             })
         });
 
-        if let Some(note) = self.note_at_uri_mut(uri) {
+        if let Some(note) = self.notes.get_mut(id) {
             note.tree = new_tree;
+            println!("got new tree for {id:?}");
+            note.update_links();
             true
         } else {
+            println!("failed to get new tree for {id:?}");
             false
         }
     }

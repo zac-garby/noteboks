@@ -94,6 +94,7 @@ impl LanguageServer for Backend {
         &self,
         params: GotoDefinitionParams,
     ) -> Result<Option<GotoDefinitionResponse>> {
+        // Ok(None)
         let uri = params.text_document_position_params.text_document.uri;
 
         Ok(Some(GotoDefinitionResponse::Scalar(Location {

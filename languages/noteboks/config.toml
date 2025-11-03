@@ -4,7 +4,8 @@ path_suffixes = ["note", "art", "list", "index", "dump"]
 autoclose_before = "]"
 brackets = [
     { start = "[", end = "]", close = true, newline = true },
+    { start = "[[", end = "]]", close = true, newline = true },
 ]
 
 [overrides.link]
-word_characters = [ "(", ")", "_", "-", " " ]
+word_characters = [ "(", ")", " " ]
