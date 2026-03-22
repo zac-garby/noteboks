@@ -9,3 +9,9 @@ target
 *.pdb
 **/mutants.out*/
 doc
+
+# Scripts
+convert_vault.py
+logseq_to_noteboks.py
+
+.DS_Store

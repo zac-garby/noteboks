@@ -1,0 +1,11 @@
+name = "noteboks-inline"
+grammar = "noteboks_md_inline"
+
+[overrides.link]
+word_characters = ["(", ")", " "]
+
+[overrides.wiki_link]
+word_characters = ["(", ")", " "]
+
+[overrides.link_destination]
+word_characters = ["(", ")", " "]

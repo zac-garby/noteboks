@@ -1,11 +1,14 @@
 name = "noteboks"
-grammar = "org"
-path_suffixes = ["note", "article", "list", "index", "dump"]
+grammar = "markdown"
+path_suffixes = ["note", "article", "list", "index", "person"]
 autoclose_before = "]"
 brackets = [
-    { start = "[", end = "]", close = true, newline = true },
-    { start = "[[", end = "]]", close = true, newline = true },
+    { start = "[[", end = "]]", close = true, newline = false },
+    { start = "---", end = "---", close = false, newline = true },
 ]
 
 [overrides.link]
-word_characters = [ "(", ")", " " ]
+word_characters = ["(", ")", " "]
+
+[overrides.wiki_link]
+word_characters = ["(", ")", " "]

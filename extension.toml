@@ -1,15 +1,15 @@
 id = "noteboks"
 name = "noteboks"
-version = "0.0.1"
+version = "0.0.2"
 schema_version = 1
-authors = ["Zac Garby <me@zacgarby.co.uk"]
-description = "Noteboks support for Zed. A fork of zed-org."
+authors = ["Zac Garby <me@zacgarby.co.uk>"]
+description = "Noteboks support for Zed. Markdown-based note vault."
 repository = "https://github.com/zac-garby/noteboks"
 
-[grammars.org]
-repository = "https://github.com/zac-garby/tree-sitter-org"
-commit = "2d8068efcb63c4a556e1676db61ea278ce2522ef"
+[grammars.noteboks_md_inline]
+repository = "https://github.com/zac-garby/tree-sitter-markdown"
+commit = "0877ff93208387fa38827db19b2fe0f111fcc9bf"
 
-[language_servers.noteboks]
+[language_servers.noteboks-lsp]
 name = "Noteboks LSP"
 languages = ["noteboks"]

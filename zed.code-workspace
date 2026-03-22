@@ -1,0 +1,13 @@
+{
+    "folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../tree-sitter-markdown"
+		},
+		{
+			"path": "../../../Documents/Vault"
+		}
+	]
+}
